@@ -23,6 +23,7 @@ bool CartesianImpedanceController::init(hardware_interface::RobotHW* robot_hw,
   std::vector<double> cartesian_stiffness_vector;
   std::vector<double> cartesian_damping_vector;
   publisher_franka_jacobian_.init(node_handle, "franka_jacobian", 1);
+  publisher_desired_state_.init(node_handle, "desired_state", 1);
 
   sub_equilibrium_pose_ = node_handle.subscribe(
       "equilibrium_pose", 20, &CartesianImpedanceController::equilibriumPoseCallback, this,
@@ -149,6 +150,8 @@ void CartesianImpedanceController::update(const ros::Time& time,
   Eigen::Vector3d position(transform.translation());
   Eigen::Quaterniond orientation(transform.linear());
 
+  publishDesiredState(time, jacobian, q, position, orientation);
+
   // compute error to desired pose
   // Clip translational error
   error_.head(3) << position - position_d_;
@@ -229,6 +232,47 @@ void CartesianImpedanceController::publishZeroJacobian(const ros::Time& time) {
     }
 }
 
+void CartesianImpedanceController::publishDesiredState(
+    const ros::Time& time,
+    const Eigen::Matrix<double, 6, 7>& jacobian,
+    const Eigen::Matrix<double, 7, 1>& q,
+    const Eigen::Vector3d& position,
+    const Eigen::Quaterniond& orientation) {
+  if (publisher_desired_state_.trylock()) {
+    // Compute Cartesian displacement from current to desired (in base frame)
+    Eigen::Matrix<double, 6, 1> dx;
+    dx.head(3) = position_d_ - position;
+
+    Eigen::Quaterniond ori = orientation;
+    if (orientation_d_.coeffs().dot(ori.coeffs()) < 0.0) {
+      ori.coeffs() = -ori.coeffs();
+    }
+    Eigen::Quaterniond err_quat(ori.inverse() * orientation_d_);
+    Eigen::Vector3d rot_err;
+    rot_err << err_quat.x(), err_quat.y(), err_quat.z();
+    dx.tail(3) = orientation.toRotationMatrix() * rot_err;
+
+    // q_d via Jacobian pseudoinverse differential IK
+    Eigen::MatrixXd J_pinv;
+    pseudoInverse(jacobian, J_pinv);
+    Eigen::Matrix<double, 7, 1> q_d = q + J_pinv * dx;
+
+    for (size_t i = 0; i < 7; ++i) {
+      publisher_desired_state_.msg_.q_d[i] = q_d(i);
+    }
+
+    // pose_d = [x, y, z, qx, qy, qz, qw]
+    publisher_desired_state_.msg_.pose_d[0] = position_d_(0);
+    publisher_desired_state_.msg_.pose_d[1] = position_d_(1);
+    publisher_desired_state_.msg_.pose_d[2] = position_d_(2);
+    publisher_desired_state_.msg_.pose_d[3] = orientation_d_.x();
+    publisher_desired_state_.msg_.pose_d[4] = orientation_d_.y();
+    publisher_desired_state_.msg_.pose_d[5] = orientation_d_.z();
+    publisher_desired_state_.msg_.pose_d[6] = orientation_d_.w();
+
+    publisher_desired_state_.unlockAndPublish();
+  }
+}
 
 Eigen::Matrix<double, 7, 1> CartesianImpedanceController::saturateTorqueRate(
     const Eigen::Matrix<double, 7, 1>& tau_d_calculated,

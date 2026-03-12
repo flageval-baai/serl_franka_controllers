@@ -21,6 +21,7 @@
 #include <franka_hw/franka_state_interface.h>
 #include <realtime_tools/realtime_publisher.h>
 #include <serl_franka_controllers/ZeroJacobian.h>
+#include <serl_franka_controllers/DesiredState.h>
 
 namespace serl_franka_controllers {
 
@@ -78,6 +79,12 @@ class CartesianImpedanceController : public controller_interface::MultiInterface
                                uint32_t level);
   void publishZeroJacobian(const ros::Time& time);
   realtime_tools::RealtimePublisher<serl_franka_controllers::ZeroJacobian> publisher_franka_jacobian_;
+  void publishDesiredState(const ros::Time& time,
+                           const Eigen::Matrix<double, 6, 7>& jacobian,
+                           const Eigen::Matrix<double, 7, 1>& q,
+                           const Eigen::Vector3d& position,
+                           const Eigen::Quaterniond& orientation);
+  realtime_tools::RealtimePublisher<serl_franka_controllers::DesiredState> publisher_desired_state_;
   void publishDebug(const ros::Time& time);
   // Equilibrium pose subscriber
   ros::Subscriber sub_equilibrium_pose_;

@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   franka_gripper
   geometry_msgs
   hardware_interface
+  std_msgs
   tf
   tf_conversions
   message_generation
@@ -25,7 +26,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Eigen3 REQUIRED)
 find_package(Franka 0.7.0 REQUIRED)
 
-add_message_files(FILES ZeroJacobian.msg)
+add_message_files(FILES ZeroJacobian.msg DesiredState.msg)
 generate_messages()
 
 generate_dynamic_reconfigure_options(
@@ -43,6 +44,7 @@ catkin_package(
     franka_gripper
     geometry_msgs
     hardware_interface
+    std_msgs
     tf
     tf_conversions
     message_runtime
